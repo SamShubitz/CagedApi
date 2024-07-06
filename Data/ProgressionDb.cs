@@ -3,10 +3,14 @@ using CagedApi.Models;
 class ProgressionDb : DbContext
 {
     public ProgressionDb(DbContextOptions<ProgressionDb> options)
-        : base(options) { }
-
+    : base(options) { }
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Progression>()
+            .HasMany(p => p.ChordList)
+            .WithOne()
+            .OnDelete(DeleteBehavior.Cascade);
+    }
     public DbSet<Progression> Progressions => Set<Progression>();
-
-    //  protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    //    => optionsBuilder.UseNpgsql("Host=localhost:5432;Database=CagedApiDb");
+    public DbSet<Chord> Chords => Set<Chord>();
 }
