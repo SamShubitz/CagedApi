@@ -22,7 +22,6 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddAuthorization();
 
-
 var app = builder.Build();
 
 app.UseHttpsRedirection();
@@ -30,45 +29,83 @@ app.UseRouting();
 app.UseCors("AllowLocalhost");
 app.UseAuthorization();
 
-app.MapGet("/", () => "Hello World!");
+app.MapGet("/", () => "unCAGED Guitar App API");
 
-app.MapGet("/progressions", async (ProgressionDb db, string? title) =>
+app.MapGet("/users", async (ProgressionDb db) =>
 {
+    var allUsers = await db.Users.Select(u => u.Id).ToListAsync();
+    return Results.Ok(allUsers);
+});
+
+app.MapPost("/users", async (User user, ProgressionDb db) =>
+{
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
+    return Results.Created($"/users/{user.Id}", user);
+});
+
+app.MapGet("/{email}/progressions", async (ProgressionDb db, string email, string? title) =>
+{
+    var user = await db.Users
+        .Include(u => u.ProgressionList)
+        .ThenInclude(p => p.ChordList)
+        .FirstOrDefaultAsync(u => u.Email == email);
+
+    if (user == null)
+    {
+        return Results.NotFound();
+    }
+
     if (!string.IsNullOrEmpty(title))
     {
-        var progression = await db.Progressions
-            .Include(p => p.ChordList)
-            .FirstOrDefaultAsync(p => p.Title == title);
+        var progression = user.ProgressionList
+            .FirstOrDefault(p => p.Title == title);
 
         return progression != null ? Results.Ok(progression) : Results.NotFound();
     }
     else
     {
-        var progressions = await db.Progressions
-            .Include(p => p.ChordList)
-            .ToListAsync();
-
-        return Results.Ok(progressions);
+        return Results.Ok(user.ProgressionList);
     }
 });
 
-app.MapGet("/progressions/{title}", async (string title, ProgressionDb db) =>
-    await db.Progressions.Include(p => p.ChordList).FirstOrDefaultAsync(p => p.Title == title)
-        is Progression progression
-            ? Results.Ok(progression)
-            : Results.NotFound());
-
-app.MapPost("/progressions", async (Progression progression, ProgressionDb db) =>
+app.MapGet("/{email}/progressions/titles", async (string email, ProgressionDb db) =>
 {
-    db.Progressions.Add(progression);
-    await db.SaveChangesAsync();
+    var user = await db.Users
+        .Include(u => u.ProgressionList)
+        .FirstOrDefaultAsync(u => u.Email == email);
 
-    return Results.Created($"/progressions/{progression.ProgressionId}", progression);
+    if (user == null)
+    {
+        return Results.NotFound();
+    }
+
+    var allTitles = user.ProgressionList.Select(p => p.Title).ToList();
+    return Results.Ok(allTitles);
 });
 
-app.MapPut("/progressions/{id}", async (int id, Progression inputProgression, ProgressionDb db) =>
+app.MapPost("/{email}/progressions", async (string email, Progression progression, ProgressionDb db) =>
 {
-    var progression = await db.Progressions.FindAsync(id);
+    var user = await db.Users
+        .Include(u => u.ProgressionList)
+        .FirstOrDefaultAsync(u => u.Email == email);
+
+    if (user == null)
+    {
+        return Results.NotFound();
+    }
+
+    user.ProgressionList.Add(progression);
+    await db.SaveChangesAsync();
+    return Results.Created($"/{email}/progressions/{progression.ProgressionId}", progression);
+});
+
+app.MapPut("/progressions/", async (Progression inputProgression, ProgressionDb db) =>
+{
+    var id = inputProgression.ProgressionId;
+    var progression = await db.Progressions
+        .Include(p => p.ChordList)
+        .FirstOrDefaultAsync(p => p.ProgressionId == id);
 
     if (progression is null) return Results.NotFound();
 
@@ -76,7 +113,6 @@ app.MapPut("/progressions/{id}", async (int id, Progression inputProgression, Pr
     progression.ChordList = inputProgression.ChordList;
 
     await db.SaveChangesAsync();
-
     return Results.NoContent();
 });
 
@@ -92,7 +128,6 @@ app.MapDelete("/progressions/{id}", async (int id, ProgressionDb db) =>
     db.Chords.RemoveRange(progression.ChordList);
     db.Progressions.Remove(progression);
     await db.SaveChangesAsync();
-
     return Results.NoContent();
 });
 
