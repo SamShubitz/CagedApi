@@ -5,7 +5,7 @@ namespace CagedApi.Models
     {
         public int Id { get; set; }
         public required string Email { get; set; }
-        public List<Progression> ProgressionList = new List<Progression>();
+        public List<Progression> ProgressionList { get; set; } = new List<Progression>();
     }
     public class Progression
     {

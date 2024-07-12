@@ -33,7 +33,7 @@ app.MapGet("/", () => "unCAGED Guitar App API");
 
 app.MapGet("/users", async (ProgressionDb db) =>
 {
-    var allUsers = await db.Users.Select(u => u.Id).ToListAsync();
+    var allUsers = await db.Users.Include(u => u.ProgressionList).ToListAsync();
     return Results.Ok(allUsers);
 });
 
@@ -44,36 +44,38 @@ app.MapPost("/users", async (User user, ProgressionDb db) =>
     return Results.Created($"/users/{user.Id}", user);
 });
 
-app.MapGet("/{email}/progressions", async (ProgressionDb db, string email, string? title) =>
+app.MapGet("/progressions", async (ProgressionDb db) =>
+{
+    var progressions = await db.Progressions.Include(p => p.ChordList).ToListAsync();
+    return Results.Ok(progressions);
+});
+
+app.MapGet("/{id}/progressions", async (ProgressionDb db, int id, string title) =>
 {
     var user = await db.Users
         .Include(u => u.ProgressionList)
         .ThenInclude(p => p.ChordList)
-        .FirstOrDefaultAsync(u => u.Email == email);
+        .FirstOrDefaultAsync(u => u.Id == id);
 
     if (user == null)
     {
         return Results.NotFound();
     }
 
-    if (!string.IsNullOrEmpty(title))
+    else
     {
         var progression = user.ProgressionList
             .FirstOrDefault(p => p.Title == title);
 
         return progression != null ? Results.Ok(progression) : Results.NotFound();
     }
-    else
-    {
-        return Results.Ok(user.ProgressionList);
-    }
 });
 
-app.MapGet("/{email}/progressions/titles", async (string email, ProgressionDb db) =>
+app.MapGet("/{id}/progressions/titles", async (int id, ProgressionDb db) =>
 {
     var user = await db.Users
         .Include(u => u.ProgressionList)
-        .FirstOrDefaultAsync(u => u.Email == email);
+        .FirstOrDefaultAsync(u => u.Id == id);
 
     if (user == null)
     {
@@ -84,11 +86,11 @@ app.MapGet("/{email}/progressions/titles", async (string email, ProgressionDb db
     return Results.Ok(allTitles);
 });
 
-app.MapPost("/{email}/progressions", async (string email, Progression progression, ProgressionDb db) =>
+app.MapPost("/{id}/progressions", async (int id, Progression progression, ProgressionDb db) =>
 {
     var user = await db.Users
         .Include(u => u.ProgressionList)
-        .FirstOrDefaultAsync(u => u.Email == email);
+        .FirstOrDefaultAsync(u => u.Id == id);
 
     if (user == null)
     {
@@ -97,7 +99,7 @@ app.MapPost("/{email}/progressions", async (string email, Progression progressio
 
     user.ProgressionList.Add(progression);
     await db.SaveChangesAsync();
-    return Results.Created($"/{email}/progressions/{progression.ProgressionId}", progression);
+    return Results.Created($"/{id}/progressions/{progression.ProgressionId}", progression);
 });
 
 app.MapPut("/progressions/", async (Progression inputProgression, ProgressionDb db) =>
